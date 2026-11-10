@@ -6,8 +6,21 @@ namespace DedupTool;
 /// </summary>
 public static class Deduper
 {
-    public static DedupResult Run(Batch batch)
+    public static DedupResult Run(Batch batch )
     {
+        // TODO (SPEC 3.3):
+        // Implement cross-mailbox email deduplication.
+        //
+        // The specification states that the same email can be collected
+        // from multiple mailboxes (Sent Items, Inbox, etc.) and should
+        // be treated as a duplicate even when the raw bytes and SHA256
+        // values differ.
+        //
+        // Current implementation deduplicates only by SHA256.
+        // Future implementation should build a normalized email identity
+        // key using email metadata (sender, recipients, subject, body,
+        // and normalized sent date) rather than relying solely on hashes.
+
         // Index so we can find parents when filling in FamilyID / SentDate.
         var byId = new Dictionary<string, Document>();
         foreach (var d in batch.Documents)
@@ -21,7 +34,8 @@ public static class Deduper
 
         foreach (var d in batch.Documents)
         {
-            if (!seen.Add(d.Sha256))
+            if (d.DocType != "attachment" &&
+                    !seen.Add(d.Sha256))
             {
                 // Already emitted a doc with this content.
                 suppressed++;
@@ -29,7 +43,7 @@ public static class Deduper
             }
 
             var familyId = d.DocId;
-            var sentDate = d.SentDate ?? "";
+            var sentDate = FormatUtcDate(d.SentDate);
 
             if (d.ParentId != null)
             {
@@ -54,4 +68,15 @@ public static class Deduper
 
         return new DedupResult(rows, suppressed);
     }
+
+    private static string FormatUtcDate(string? date)
+{
+    if (string.IsNullOrWhiteSpace(date))
+        return "";
+
+    return DateTimeOffset
+        .Parse(date)
+        .UtcDateTime
+        .ToString("yyyy-MM-ddTHH:mm:ssZ");
+}
 }
